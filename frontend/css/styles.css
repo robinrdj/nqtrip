@@ -261,3 +261,29 @@ input[type="number"] {
   padding: 16px;
   margin-bottom: 30px;
 }
+
+.display-flex{
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.content-item-left{
+  width: 50%;
+  margin-left: 0%;
+}
+.content-item-right{
+  width: 50%;
+}
+
+.card-custom{
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.img-custom{
+  width: 250px;
+  height: 300px;
+
+}

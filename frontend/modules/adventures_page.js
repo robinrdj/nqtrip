@@ -3,6 +3,8 @@ import config from "../conf/index.js";
 
 //Implementation to extract city from query params
 function getCityFromURL(search) {
+  let params = new URLSearchParams(search);
+  return params.get("city");
   // TODO: MODULE_ADVENTURES
   // 1. Extract the city id from the URL's Query Param and return it
 
@@ -10,6 +12,18 @@ function getCityFromURL(search) {
 
 //Implementation of fetch call with a paramterized input based on city
 async function fetchAdventures(city) {
+  
+  try{
+    // let cityGot = getCityFromURL(window.location.search);
+    // console.log(cityGot)
+    let res = await fetch(`${config.backendEndpoint}/adventures?city=${city}`);
+    let resJson = await res.json();
+    return resJson;
+  }catch(err){
+    return null;
+  }
+
+
   // TODO: MODULE_ADVENTURES
   // 1. Fetch adventures using the Backend API and return the data
 
@@ -17,6 +31,64 @@ async function fetchAdventures(city) {
 
 //Implementation of DOM manipulation to add adventures for the given city from list of adventures
 function addAdventureToDOM(adventures) {
+  
+
+  adventures.forEach(item=>{
+     
+  let cardElement = document.createElement("div");
+  cardElement.setAttribute("class","activity-card");
+
+
+  let aElement = document.createElement("a");
+  aElement.setAttribute("href",`detail/?adventure=${item.id}`);
+  aElement.setAttribute("id",item.id);
+
+  let imgElement = document.createElement("img");
+  imgElement.setAttribute("src",item.image);
+  imgElement.setAttribute("class","img-custom activity-card img ");
+
+  aElement.append(imgElement);
+
+  let nameElement = document.createElement("p");
+  nameElement.innerText=item.name;
+  nameElement.setAttribute("class","content-item-left");
+
+  let costPerHeadElement = document.createElement("p");
+  costPerHeadElement.innerText=`₹ ${item.costPerHead}`;
+  costPerHeadElement.setAttribute("class","content-item-right");
+
+
+  let durationElement = document.createElement("p");
+  durationElement.innerText = "duration";
+  durationElement.setAttribute("class","content-item-left");
+
+  let durationValueElement = document.createElement("p");
+  durationValueElement.innerText = `${item.duration} hours`;
+  durationValueElement.setAttribute("class","content-item-right");
+
+
+  const row1Element = document.createElement("div");
+  row1Element.append(nameElement, costPerHeadElement);
+  row1Element.setAttribute("class","display-flex");
+
+  const row2Element = document.createElement("div");
+  row2Element.append(durationElement, durationValueElement);
+  row2Element.setAttribute("class","display-flex");
+
+
+  cardElement.append(aElement, row1Element, row2Element);
+  cardElement.setAttribute("class", "col-lg-3 col-md-3 col-sm-6 col-xs-6 card-custom");
+  
+
+  let dataElement = document.getElementById("data");
+  
+  dataElement.append(cardElement);
+  
+
+  })
+  
+
+
   // TODO: MODULE_ADVENTURES
   // 1. Populate the Adventure Cards and insert those details into the DOM
 

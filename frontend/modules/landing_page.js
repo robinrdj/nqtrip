@@ -44,7 +44,7 @@ function addCityToDOM(id, city, description, image) {
   imgElement.setAttribute("src",image);
 
   aElement.append(imgElement);
-
+  
   const pElement = document.createElement("p");
   pElement.innerText=city;
   const descriptionElement = document.createElement("p");
