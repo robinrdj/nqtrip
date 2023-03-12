@@ -98,6 +98,8 @@ function addAdventureToDOM(adventures) {
 function filterByDuration(list, low, high) {
   // TODO: MODULE_FILTERS
   // 1. Filter adventures based on Duration and return filtered list
+    return list.filter(item=>item.duration>=low && item.duration<=high);
+  
 
 }
 
@@ -105,8 +107,9 @@ function filterByDuration(list, low, high) {
 function filterByCategory(list, categoryList) {
   // TODO: MODULE_FILTERS
   // 1. Filter adventures based on their Category and return filtered list
-
+  return list.filter(item=>categoryList.includes(item.category))
 }
+
 
 // filters object looks like this filters = { duration: "", category: [] };
 
@@ -116,6 +119,21 @@ function filterByCategory(list, categoryList) {
 // 3. Filter by duration and category together
 
 function filterFunction(list, filters) {
+
+  if(filters.category.length && filters.duration===""){
+    return filterByCategory(list, filters.category);
+  }
+
+  if(filters.duration!=="" && filters.category.length===0){
+    return filterByDuration(list, filters.duration.split("-")[0],filters.duration.split("-")[1]);
+  }
+
+  if(filters.category.length && filters.duration!==""){
+    let categoryFiltered = filterByCategory(list, filters.category);
+    let durationFilterd = filterByDuration(categoryFiltered, filters.duration.split("-")[0],filters.duration.split("-")[1]);
+    return durationFilterd;
+  }
+
   // TODO: MODULE_FILTERS
   // 1. Handle the 3 cases detailed in the comments above and return the filtered list of adventures
   // 2. Depending on which filters are needed, invoke the filterByDuration() and/or filterByCategory() methods
@@ -129,6 +147,7 @@ function filterFunction(list, filters) {
 function saveFiltersToLocalStorage(filters) {
   // TODO: MODULE_FILTERS
   // 1. Store the filters as a String to localStorage
+  localStorage.setItem("filters",JSON.stringify(filters));
 
   return true;
 }
@@ -137,10 +156,10 @@ function saveFiltersToLocalStorage(filters) {
 function getFiltersFromLocalStorage() {
   // TODO: MODULE_FILTERS
   // 1. Get the filters from localStorage and return String read as an object
-
+    return JSON.parse(localStorage.getItem("filters"));
 
   // Place holder for functionality to work in the Stubs
-  return null;
+  // return null;
 }
 
 //Implementation of DOM manipulation to add the following filters to DOM :
@@ -148,6 +167,19 @@ function getFiltersFromLocalStorage() {
 // 2. Update the category pills on the DOM
 
 function generateFilterPillsAndUpdateDOM(filters) {
+
+   let categoryListElement = document.getElementById("category-list");
+   filters.category.forEach(item=>{
+    let spanElement = document.createElement("span");
+    spanElement.setAttribute("class","category-filter");
+    spanElement.innerText = item;
+    categoryListElement.append(spanElement);
+   });
+
+   let durationElement = document.getElementById("duration-select");
+   durationElement.value=filters.duration;
+
+
   // TODO: MODULE_FILTERS
   // 1. Use the filters given as input, update the Duration Filter value and Generate Category Pills
 
