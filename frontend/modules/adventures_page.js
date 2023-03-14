@@ -111,6 +111,8 @@ function filterByCategory(list, categoryList) {
 }
 
 
+
+
 // filters object looks like this filters = { duration: "", category: [] };
 
 //Implementation of combined filter function that covers the following cases :
@@ -160,6 +162,10 @@ function getFiltersFromLocalStorage() {
 
   // Place holder for functionality to work in the Stubs
   // return null;
+
+
+  // Place holder for functionality to work in the Stubs
+  return null;
 }
 
 //Implementation of DOM manipulation to add the following filters to DOM :
