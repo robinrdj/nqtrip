@@ -113,6 +113,8 @@ function filterByCategory(list, categoryList) {
 
 
 
+
+
 // filters object looks like this filters = { duration: "", category: [] };
 
 //Implementation of combined filter function that covers the following cases :
