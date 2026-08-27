@@ -1,5 +1,6 @@
+import { ImageOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import Spinner from "react-bootstrap/Spinner";
+import { cn } from "../lib/cn";
 import { responsiveImage, type ImageSizing } from "../lib/images";
 
 interface SafeImageProps {
@@ -8,13 +9,14 @@ interface SafeImageProps {
   /** Sizing profile used to request a right-sized image and reserve its box. */
   sizing: ImageSizing;
   className?: string;
+  imgClassName?: string;
   /** Set for the first meaningful image on a page so it is not deferred. */
   priority?: boolean;
 }
 
 /**
- * An <img> that reserves its space, shows a spinner while loading, and
- * degrades to a placeholder instead of a broken-image icon.
+ * An <img> that reserves its space, shows a shimmer while loading, and degrades
+ * to a placeholder instead of a broken-image icon.
  *
  * The seed data contains null entries and hosts that no longer resolve, so
  * missing artwork is a normal case rather than a rendering glitch.
@@ -24,11 +26,10 @@ export default function SafeImage({
   alt,
   sizing,
   className,
+  imgClassName,
   priority = false,
 }: SafeImageProps) {
-  const [status, setStatus] = useState<"loading" | "loaded" | "failed">(
-    "loading"
-  );
+  const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
   const imgRef = useRef<HTMLImageElement>(null);
 
   // A new src deserves a fresh attempt.
@@ -48,26 +49,18 @@ export default function SafeImage({
   }, [src]);
 
   const usable = typeof src === "string" && src.trim() !== "";
-  const frameClass = ["img-frame", className].filter(Boolean).join(" ");
 
   if (!usable || status === "failed") {
     return (
-      <span className={frameClass} role="img" aria-label={alt}>
-        <span className="image-fallback">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <path d="m21 15-4.5-4.5L3 21" />
-          </svg>
-        </span>
+      <span
+        className={cn(
+          "grid place-items-center bg-surface-inset text-ink-muted",
+          className
+        )}
+        role="img"
+        aria-label={alt}
+      >
+        <ImageOff className="size-8" aria-hidden="true" />
       </span>
     );
   }
@@ -75,11 +68,9 @@ export default function SafeImage({
   const image = responsiveImage(src, sizing);
 
   return (
-    <span className={frameClass}>
+    <span className={cn("relative block overflow-hidden bg-surface-inset", className)}>
       {status === "loading" && (
-        <span className="img-spinner" aria-hidden="true">
-          <Spinner animation="border" variant="warning" size="sm" />
-        </span>
+        <span className="shimmer absolute inset-0 block" aria-hidden="true" />
       )}
       <img
         ref={imgRef}
@@ -92,7 +83,12 @@ export default function SafeImage({
         decoding="async"
         loading={priority ? "eager" : "lazy"}
         fetchpriority={priority ? "high" : "auto"}
-        className={status === "loaded" ? "is-loaded" : undefined}
+        className={cn(
+          "size-full object-cover transition-[opacity,filter,transform] duration-500 ease-out",
+          // Blur-up: the image resolves from a soft blur rather than snapping in.
+          status === "loaded" ? "opacity-100 blur-0" : "scale-105 opacity-0 blur-lg",
+          imgClassName
+        )}
         onLoad={() => setStatus("loaded")}
         onError={() => setStatus("failed")}
       />

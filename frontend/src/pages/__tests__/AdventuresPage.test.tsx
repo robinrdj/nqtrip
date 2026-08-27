@@ -1,124 +1,157 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AdventuresPage from "../AdventuresPage";
-import type { Adventure } from "../../types";
+import { makeAdventure, makeAdventureList, makeCity } from "../../test/factories";
+import { renderWithProviders } from "../../test/render";
 
-const adventures: Adventure[] = [
-  {
-    id: "a1",
-    name: "Beach Cabanna",
-    costPerHead: 500,
-    currency: "INR",
-    image: "https://example.com/a1.jpeg",
-    duration: 3,
-    category: "Beaches",
-  },
-  {
-    id: "a2",
-    name: "Mount Sleephod",
-    costPerHead: 900,
-    currency: "INR",
-    image: "https://example.com/a2.jpeg",
-    duration: 15,
-    category: "Hillside",
-  },
-];
+/**
+ * Routes fetch calls by URL, so a page that fires several queries at once is
+ * served the right payload for each without depending on call order.
+ */
+function stubApi(overrides: Record<string, unknown> = {}) {
+  const fetchMock = vi.fn((input: string) => {
+    const url = String(input);
 
-function mockAdventures() {
-  return vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(JSON.stringify(adventures), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    })
-  );
-}
+    const body =
+      url.includes("/auth/me")
+        ? { status: 401, payload: { error: { message: "Not signed in" } } }
+        : url.includes("/cities")
+          ? { status: 200, payload: { items: [makeCity()] } }
+          : url.includes("/adventures")
+            ? { status: 200, payload: overrides.adventures ?? makeAdventureList() }
+            : { status: 200, payload: {} };
 
-function renderPage(route = "/adventures?city=bengaluru") {
-  return render(
-    <MemoryRouter initialEntries={[route]}>
-      <Routes>
-        <Route path="/adventures" element={<AdventuresPage />} />
-      </Routes>
-    </MemoryRouter>
-  );
-}
-
-describe("<AdventuresPage />", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    vi.restoreAllMocks();
+    return Promise.resolve(
+      new Response(JSON.stringify(body.payload), {
+        status: body.status,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
   });
 
-  it("requests adventures for the city in the query string", async () => {
-    const fetchSpy = mockAdventures();
-    renderPage();
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
 
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining("?city=bengaluru"),
-      undefined
-    );
-    // The city id is title-cased for display.
-    expect(screen.getByText("Bengaluru")).toBeInTheDocument();
+describe("AdventuresPage", () => {
+  beforeEach(() => {
+    stubApi();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the city name and result count", async () => {
+    renderWithProviders(<AdventuresPage />, { route: "/adventures?city=goa" });
+
+    expect(await screen.findByRole("heading", { name: "Goa" })).toBeInTheDocument();
+    expect(await screen.findByText("1 adventure to choose from")).toBeInTheDocument();
   });
 
   it("renders a card per adventure", async () => {
-    mockAdventures();
-    renderPage();
+    stubApi({
+      adventures: makeAdventureList([
+        makeAdventure({ id: "a1", name: "Alpha" }),
+        makeAdventure({ id: "a2", name: "Bravo" }),
+      ]),
+    });
 
-    expect(
-      await screen.findByRole("heading", { name: "Beach Cabanna" })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Mount Sleephod" })
-    ).toBeInTheDocument();
+    renderWithProviders(<AdventuresPage />, { route: "/adventures?city=goa" });
+
+    expect(await screen.findByRole("heading", { name: "Alpha" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Bravo" })).toBeInTheDocument();
   });
 
-  it("applies a duration filter and persists it to localStorage", async () => {
-    mockAdventures();
-    renderPage();
+  it("sends the city filter to the API", async () => {
+    const fetchMock = stubApi();
 
-    await screen.findByRole("heading", { name: "Beach Cabanna" });
+    renderWithProviders(<AdventuresPage />, { route: "/adventures?city=goa" });
 
-    await userEvent.selectOptions(
-      screen.getByLabelText("Filter by duration"),
-      "0-2"
-    );
-
-    // Neither adventure is under 2 hours.
-    expect(
-      screen.queryByRole("heading", { name: "Beach Cabanna" })
-    ).not.toBeInTheDocument();
-    expect(screen.getByText(/No adventures match these filters/)).toBeInTheDocument();
-
-    expect(JSON.parse(localStorage.getItem("filters")!)).toEqual({
-      duration: "0-2",
-      category: [],
+    await waitFor(() => {
+      const called = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(called.some((url) => url.includes("/adventures?city=goa"))).toBe(true);
     });
   });
 
-  it("restores filters from localStorage on mount", async () => {
-    localStorage.setItem(
-      "filters",
-      JSON.stringify({ duration: "", category: ["Hillside"] })
-    );
-    mockAdventures();
-    renderPage();
+  it("asks the server to re-sort rather than sorting in the browser", async () => {
+    const fetchMock = stubApi();
+    const user = userEvent.setup();
 
-    expect(
-      await screen.findByRole("heading", { name: "Mount Sleephod" })
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Beach Cabanna" })
-    ).not.toBeInTheDocument();
+    renderWithProviders(<AdventuresPage />, { route: "/adventures?city=goa" });
+
+    await screen.findByRole("heading", { name: "Goa" });
+    await user.selectOptions(screen.getByLabelText("Sort by"), "price-asc");
+
+    await waitFor(() => {
+      const called = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(called.some((url) => url.includes("sort=price-asc"))).toBe(true);
+    });
   });
 
-  it("shows an error when adventures cannot be loaded", async () => {
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
-    renderPage();
+  it("shows an empty state, and offers to clear the filters that caused it", async () => {
+    stubApi({ adventures: makeAdventureList([], { total: 0 }) });
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    renderWithProviders(<AdventuresPage />, {
+      route: "/adventures?city=goa&category=Party",
+    });
+
+    expect(
+      await screen.findByText("Nothing matches those filters")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear all filters" })
+    ).toBeInTheDocument();
+  });
+
+  it("surfaces the API's error message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string) =>
+        Promise.resolve(
+          String(input).includes("/adventures")
+            ? new Response(
+                JSON.stringify({ error: { message: "The catalogue is unavailable." } }),
+                { status: 500, headers: { "Content-Type": "application/json" } }
+              )
+            : new Response(JSON.stringify({ items: [] }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+        )
+      )
+    );
+
+    renderWithProviders(<AdventuresPage />, { route: "/adventures?city=goa" });
+
+    expect(
+      await screen.findByText("The catalogue is unavailable.")
+    ).toBeInTheDocument();
+  });
+
+  it("hides pagination when everything fits on one page", async () => {
+    renderWithProviders(<AdventuresPage />, { route: "/adventures?city=goa" });
+
+    await screen.findByRole("heading", { name: "Goa" });
+    expect(screen.queryByRole("navigation", { name: "Pagination" })).not.toBeInTheDocument();
+  });
+
+  it("pages through results", async () => {
+    stubApi({
+      adventures: makeAdventureList([makeAdventure()], { total: 50, totalPages: 3 }),
+    });
+
+    renderWithProviders(<AdventuresPage />, { route: "/adventures?city=goa" });
+
+    expect(await screen.findByText("Page 1 of 3")).toBeInTheDocument();
+    // Nothing precedes page one.
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+  });
+
+  it("invites an anonymous visitor to sign in", async () => {
+    renderWithProviders(<AdventuresPage />, { route: "/adventures?city=goa" });
+
+    expect(await screen.findByRole("link", { name: "Sign in" })).toBeInTheDocument();
   });
 });

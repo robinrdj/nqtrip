@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+/*
+  Dark mode is driven by a `dark` class on <html>, not by prefers-color-scheme
+  alone, so the in-app toggle can override the OS setting. ThemeProvider applies
+  the class and falls back to the OS preference when the visitor has no
+  explicit choice.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Design tokens.
+
+  Ported from the original styles.css. Colours are expressed as OKLCH so that
+  lightening or darkening a brand shade keeps its perceived saturation, which
+  plain HSL does not.
+*/
+@theme {
+  --color-brand-50: oklch(0.97 0.02 60);
+  --color-brand-100: oklch(0.94 0.045 60);
+  --color-brand-200: oklch(0.89 0.08 60);
+  --color-brand-300: oklch(0.83 0.12 55);
+  --color-brand-400: oklch(0.77 0.16 50);
+  --color-brand-500: oklch(0.7 0.19 45);
+  --color-brand-600: oklch(0.63 0.2 42);
+  --color-brand-700: oklch(0.54 0.18 40);
+  --color-brand-800: oklch(0.45 0.15 40);
+  --color-brand-900: oklch(0.38 0.12 40);
+
+  /* A cool counterpoint to the warm brand, used for accents and links. */
+  --color-teal-400: oklch(0.78 0.13 195);
+  --color-teal-500: oklch(0.7 0.14 195);
+  --color-teal-600: oklch(0.6 0.13 195);
+
+  --font-sans: "Inter var", "Inter", system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Clash Display", "Inter var", system-ui, sans-serif;
+
+  --radius-card: 1rem;
+  --radius-panel: 1.25rem;
+
+  --shadow-card: 0 1px 3px rgb(16 24 40 / 0.06), 0 8px 24px -12px rgb(16 24 40 / 0.14);
+  --shadow-lift: 0 12px 32px -12px rgb(16 24 40 / 0.28), 0 2px 6px rgb(16 24 40 / 0.06);
+  --shadow-panel: 0 24px 64px -24px rgb(16 24 40 / 0.35);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-float: float 7s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-18px) scale(1.03); }
+}
+
+/*
+  Semantic surface tokens.
+
+  Components reference these rather than raw palette steps, so the dark theme is
+  a redefinition in one place instead of a `dark:` variant on every element.
+  Every value is defined in the light block first — a token whose only
+  definition lives inside the dark block would render as nothing in light mode.
+*/
+@layer base {
+  :root {
+    --surface: oklch(1 0 0);
+    --surface-raised: oklch(1 0 0);
+    --surface-sunken: oklch(0.975 0.003 260);
+    --surface-inset: oklch(0.955 0.005 260);
+
+    --ink: oklch(0.21 0.02 265);
+    --ink-soft: oklch(0.44 0.02 265);
+    --ink-muted: oklch(0.58 0.015 265);
+
+    --line: oklch(0.91 0.006 265);
+    --line-strong: oklch(0.85 0.01 265);
+
+    --overlay: oklch(0.21 0.02 265 / 0.45);
+
+    color-scheme: light;
+  }
+
+  .dark {
+    /*
+      Not an inversion: the dark surfaces carry a slight blue cast and the text
+      never reaches pure white, which is what stops a dark UI reading as harsh.
+    */
+    --surface: oklch(0.19 0.015 265);
+    --surface-raised: oklch(0.23 0.017 265);
+    --surface-sunken: oklch(0.16 0.014 265);
+    --surface-inset: oklch(0.26 0.018 265);
+
+    --ink: oklch(0.96 0.005 265);
+    --ink-soft: oklch(0.79 0.012 265);
+    --ink-muted: oklch(0.65 0.015 265);
+
+    --line: oklch(0.31 0.018 265);
+    --line-strong: oklch(0.4 0.02 265);
+
+    --overlay: oklch(0.12 0.02 265 / 0.65);
+
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Honour the OS setting for people who asked for less movement. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    background-color: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* A single visible focus treatment, so keyboard users are never lost. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+
+  ::selection {
+    background: var(--color-brand-200);
+    color: oklch(0.25 0.05 45);
+  }
+}
+
+@layer utilities {
+  .bg-surface { background-color: var(--surface); }
+  .bg-surface-raised { background-color: var(--surface-raised); }
+  .bg-surface-sunken { background-color: var(--surface-sunken); }
+  .bg-surface-inset { background-color: var(--surface-inset); }
+
+  .text-ink { color: var(--ink); }
+  .text-ink-soft { color: var(--ink-soft); }
+  .text-ink-muted { color: var(--ink-muted); }
+
+  .border-line { border-color: var(--line); }
+  .border-line-strong { border-color: var(--line-strong); }
+
+  /*
+    Used behind the hero. Three offset radial gradients read as a soft aurora
+    without the cost of an image, and they tint rather than replace the
+    background so the effect survives the theme switch.
+  */
+  .bg-aurora {
+    background-image:
+      radial-gradient(ellipse 80% 60% at 15% 0%, var(--color-brand-300) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 55% at 85% 10%, var(--color-teal-400) 0%, transparent 50%),
+      radial-gradient(ellipse 90% 70% at 50% 100%, var(--color-brand-200) 0%, transparent 60%);
+  }
+
+  /* Loading placeholder sweep. */
+  .shimmer {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--surface-inset) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* Hides scrollbars on horizontally scrollable chip rows. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

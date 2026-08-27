@@ -1,190 +1,232 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ApiError,
-  createReservation,
-  fetchAdventureDetail,
-  fetchAdventures,
-  fetchCities,
-  fetchReservations,
-} from "../client";
-import mockAdventuresData from "../../test/fixtures/adventures.json";
-import mockCitiesData from "../../test/fixtures/cities.json";
+import * as api from "../client";
+import { ApiError } from "../client";
 
-function mockJsonResponse(body: unknown) {
-  return vi
-    .spyOn(globalThis, "fetch")
-    .mockResolvedValue(
-      new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      })
-    );
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
-describe("api client", () => {
+describe("request building", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
-    vi.restoreAllMocks();
+    fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [] }));
+    vi.stubGlobal("fetch", fetchMock);
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  describe("fetchCities()", () => {
-    it("calls /cities and returns the cities array", async () => {
-      const fetchSpy = mockJsonResponse(mockCitiesData);
-
-      const data = await fetchCities();
-
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining("/cities"),
-        undefined
-      );
-      expect(fetchSpy).not.toHaveBeenCalledWith(
-        expect.stringContaining("//cities"),
-        undefined
-      );
-      expect(data).toBeInstanceOf(Array);
-      expect(data).toEqual(mockCitiesData);
-    });
-
-    it("throws an ApiError when the network call fails", async () => {
-      vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("API failure"));
-
-      await expect(fetchCities()).rejects.toBeInstanceOf(ApiError);
-    });
+  it("targets the v1 API", async () => {
+    await api.fetchCities();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/cities");
   });
 
-  describe("fetchAdventures()", () => {
-    it("calls /adventures with the city query param", async () => {
-      const fetchSpy = mockJsonResponse(mockAdventuresData);
+  it("sends cookies so the httpOnly session travels with the request", async () => {
+    await api.fetchCities();
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: "include" });
+  });
 
-      const data = await fetchAdventures("bengaluru");
+  it("serialises filters into query params", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ items: [], savedIds: [] }));
 
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining("/adventures"),
-        undefined
-      );
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining("?city=bengaluru"),
-        undefined
-      );
-      expect(data).toEqual(mockAdventuresData);
+    await api.fetchAdventures({
+      city: "goa",
+      category: ["Beaches", "Party"],
+      durationMin: 2,
+      durationMax: 6,
+      sort: "price-asc",
+      page: 2,
     });
 
-    it("throws an ApiError when the network call fails", async () => {
-      vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("API failure"));
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain("city=goa");
+    expect(url).toContain("category=Beaches%2CParty");
+    expect(url).toContain("durationMin=2");
+    expect(url).toContain("durationMax=6");
+    expect(url).toContain("sort=price-asc");
+    expect(url).toContain("page=2");
+  });
 
-      await expect(fetchAdventures("bengaluru")).rejects.toBeInstanceOf(
-        ApiError
-      );
+  it("omits empty values rather than sending blanks", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ items: [], savedIds: [] }));
+
+    await api.fetchAdventures({ city: "goa", q: "", category: [] });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe("/api/v1/adventures?city=goa");
+  });
+
+  it("leaves the default sort and first page out of the URL", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ items: [], savedIds: [] }));
+
+    await api.fetchAdventures({ city: "goa", sort: "recommended", page: 1 });
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/adventures?city=goa");
+  });
+
+  it("encodes ids that would otherwise break the path", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ adventure: {}, saved: false }));
+
+    await api.fetchAdventure("a/b?c");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/adventures/a%2Fb%3Fc");
+  });
+
+  it("posts a booking as JSON", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ reservation: {} }, 201));
+
+    await api.createReservation({
+      adventure: "adv-1",
+      name: "Robin",
+      date: "2099-01-15",
+      persons: 2,
     });
 
-    it("throws an ApiError on a non-OK response", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
-        new Response("nope", { status: 500 })
-      );
-
-      await expect(fetchAdventures("bengaluru")).rejects.toBeInstanceOf(
-        ApiError
-      );
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe("POST");
+    expect(init.headers).toMatchObject({ "Content-Type": "application/json" });
+    expect(JSON.parse(init.body)).toEqual({
+      adventure: "adv-1",
+      name: "Robin",
+      date: "2099-01-15",
+      persons: 2,
     });
+  });
+});
 
-    it("surfaces the API’s own message on a rejected request", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            message: "Date of booking is incorrect. Can’t book for a past date!",
-          }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+describe("error handling", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("surfaces the API's human-readable message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          { error: { code: "CONFLICT", message: "Only 2 seats are left." } },
+          409
         )
-      );
+      )
+    );
 
-      await expect(fetchAdventures("bengaluru")).rejects.toThrow(
-        "Date of booking is incorrect. Can’t book for a past date!"
-      );
-    });
+    await expect(api.fetchCities()).rejects.toThrowError("Only 2 seats are left.");
+  });
 
-    it("falls back to the status code when the body has no message", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
-        new Response("not json", { status: 503 })
-      );
+  it("collects per-field validation detail", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Some values are not valid.",
+              details: [
+                { field: "date", message: "You cannot book a date in the past." },
+                { field: "persons", message: "At least one person." },
+              ],
+            },
+          },
+          400
+        )
+      )
+    );
 
-      await expect(fetchAdventures("bengaluru")).rejects.toThrow(
-        "Request failed (503)"
-      );
+    const error = await api
+      .createReservation({ adventure: "a", name: "R", date: "x", persons: 0 })
+      .catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).fieldErrors).toEqual({
+      date: "You cannot book a date in the past.",
+      persons: "At least one person.",
     });
   });
 
-  describe("fetchAdventureDetail()", () => {
-    it("calls /adventures/detail with the adventure id", async () => {
-      const fetchSpy = mockJsonResponse(mockAdventuresData[0]);
+  it("falls back to the status code when the body is not JSON", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("<html>500</html>", { status: 500 }))
+    );
 
-      const data = await fetchAdventureDetail("2447910730");
-
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining("/adventures/detail?adventure=2447910730"),
-        undefined
-      );
-      expect(data).toEqual(mockAdventuresData[0]);
-    });
-
-    it("throws an ApiError when the network call fails", async () => {
-      vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("API failure"));
-
-      await expect(fetchAdventureDetail("123")).rejects.toBeInstanceOf(ApiError);
-    });
+    await expect(api.fetchCities()).rejects.toThrowError("Request failed (500)");
   });
 
-  describe("fetchReservations()", () => {
-    it("calls /reservations and returns the data", async () => {
-      const fetchSpy = mockJsonResponse([]);
+  it("explains a network failure rather than leaking the raw error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 
-      const data = await fetchReservations();
-
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining("/reservations"),
-        undefined
-      );
-      expect(data).toEqual([]);
-    });
-
-    it("throws an ApiError when the network call fails", async () => {
-      vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("API failure"));
-
-      await expect(fetchReservations()).rejects.toBeInstanceOf(ApiError);
-    });
+    await expect(api.fetchCities()).rejects.toThrowError(/could not reach/i);
   });
 
-  describe("createReservation()", () => {
-    it("POSTs the reservation as JSON", async () => {
-      const fetchSpy = mockJsonResponse({ success: true });
+  it("reports 401 as unauthorized", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({ error: { message: "You need to sign in." } }, 401)
+      )
+    );
 
-      const result = await createReservation({
-        name: "Test Booking",
-        date: "2020-11-05",
-        person: "2",
-        adventure: "6298356896",
-      });
+    const error = await api.fetchCurrentUser().catch((err: unknown) => err);
+    expect((error as ApiError).isUnauthorized).toBe(true);
+  });
+});
 
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
+describe("token refresh", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
-      const [url, init] = fetchSpy.mock.calls[0];
-      expect(url).toEqual(expect.stringContaining("/reservations/new"));
-      expect(init?.method).toEqual("POST");
-      expect(JSON.stringify(init?.headers)).toEqual(
-        JSON.stringify({ "Content-Type": "application/json" })
+  it("refreshes once and replays the original request", async () => {
+    const fetchMock = vi
+      .fn()
+      // The original request, with an expired access token.
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "expired" } }, 401))
+      // The refresh.
+      .mockResolvedValueOnce(jsonResponse({ user: {} }))
+      // The replay.
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: "goa" }] }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cities = await api.fetchCities();
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/auth/refresh");
+    expect(cities).toEqual([{ id: "goa" }]);
+  });
+
+  it("gives up after a failed refresh instead of looping", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "expired" } }, 401))
+      .mockResolvedValueOnce(jsonResponse({ error: { message: "no session" } }, 401));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api.fetchCities()).rejects.toThrowError();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not try to refresh a failed login", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ error: { message: "That email or password is not right." } }, 401)
       );
 
-      const body = JSON.parse(String(init?.body));
-      expect(body).toHaveProperty("name");
-      expect(body).toHaveProperty("date");
-      expect(body).toHaveProperty("person");
-      expect(body).toHaveProperty("adventure", "6298356896");
+    vi.stubGlobal("fetch", fetchMock);
 
-      expect(result).toEqual({ success: true });
-    });
+    await expect(
+      api.login({ email: "a@b.com", password: "wrong" })
+    ).rejects.toThrowError(/not right/);
+
+    // A wrong password is not an expired session, so refreshing would be noise.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

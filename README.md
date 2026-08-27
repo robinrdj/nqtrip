@@ -1,101 +1,97 @@
 # QTrip
 
-A travel adventure booking app: browse cities, filter adventures by duration and
-category, and reserve a spot.
+A travel adventure booking app: browse cities, filter adventures server-side,
+book seats against real capacity, save favourites and leave reviews.
 
-Built as a React single-page app in TypeScript, backed by a small Express REST API.
+React 19-ready SPA in TypeScript (strict), backed by a TypeScript + MongoDB API.
 
 ## Stack
 
 | Layer | Choice |
 | --- | --- |
 | UI | React 18 + TypeScript (strict) |
+| Styling | Tailwind CSS v4 + Radix UI primitives |
+| Motion | Framer Motion |
+| Data | TanStack Query |
+| Forms | React Hook Form + Zod |
 | Routing | React Router 7 |
 | Build | Vite 6 |
-| Components | react-bootstrap 2 on Bootstrap 5 |
-| Tests | Vitest 3 + React Testing Library |
-| API | Express 4 + lowdb |
-
-The repo is an npm workspace with two packages:
-
-| Package | Path | What it is |
-| --- | --- | --- |
-| `@qtrip/frontend` | `frontend/` | React SPA |
-| `@qtrip/backend` | `backend/` | REST API (data lives in `backend/db.json`) |
+| Tests | Vitest + React Testing Library |
+| API | Express 5 + Mongoose 8 + MongoDB ([separate repo](../../qtripBackend/backend)) |
 
 ## Getting started
 
-Requires Node 20 or newer.
+Requires Node 20+.
 
 ```bash
-npm install     # installs both workspaces from the repo root
-npm run dev     # backend on :8082, frontend on :8081
+npm install
+npm run dev          # frontend on :8081
 ```
 
-`npm run dev` starts both servers together and opens http://localhost:8081.
+The frontend expects the API on `:8082`. In the backend repo:
 
-### Other commands
+```bash
+npm run dev:memory   # API + a disposable in-memory MongoDB, seeded
+```
+
+That needs no connection string, so the whole app runs from a clean checkout.
+Use `npm run dev` there instead to run against a real `MONGODB_URI`.
+
+Vite proxies `/api` to `:8082`, so requests are same-origin in development and
+the auth cookies stay first-party.
+
+Sign in with `demo@qtrip.dev` / `Demo1234`.
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Runs the Vitest suite (70 tests) |
-| `npm run typecheck` | Type-checks without emitting |
-| `npm run build` | Type-checks, then builds to `frontend/dist/` |
-| `npm run preview` | Serves the production build |
-| `npm run dev:backend` | Backend only, with file watching |
-| `npm run dev:frontend` | Frontend only |
+| `npm run dev` | Vite dev server |
+| `npm test` | 73 tests |
+| `npm run typecheck` | Type-check without emitting |
+| `npm run build` | Type-check, then build to `frontend/dist/` |
 
 ## Routes
 
-| Route | Page |
-| --- | --- |
-| `/` | Cities, with client-side search |
-| `/adventures?city=<id>` | Adventures in a city, with filters |
-| `/adventures/:adventureId` | Adventure detail, photo carousel, booking form |
-| `/reservations` | All reservations |
+| Route | Page | |
+| --- | --- | --- |
+| `/` | Cities, with client-side search | |
+| `/adventures?city=<id>` | Filter, search, sort, page | filters live in the URL |
+| `/adventures/:id` | Detail, carousel, booking, reviews | |
+| `/login`, `/register` | Auth | |
+| `/trips` | Your bookings, with cancel | auth |
+| `/saved` | Wishlist | auth |
+| `/account` | Profile and theme | auth |
 
-## Project layout
+## How it fits together
 
 ```
 frontend/src/
-  api/client.ts        typed fetch wrappers; throws ApiError on failure
-  components/          presentational + form components
+  api/client.ts        typed fetch wrappers; ApiError carries per-field detail
+  providers/           AuthProvider (session), ThemeProvider (light/dark)
+  hooks/queries.ts     every TanStack Query key, hook and mutation
+  hooks/useAdventureQuery.ts   filter state, read from and written to the URL
+  lib/schemas.ts       Zod schemas mirroring the backend's
+  components/ui/       Button, Field, Rating, States (skeleton/empty/error)
+  components/          cards, filters, carousel, booking form, reviews
   pages/               one component per route
-  hooks/useAsync.ts    loading/error/data state, ignores superseded requests
-  lib/filters.ts       pure filtering logic
-  lib/storage.ts       localStorage persistence for filters
-  lib/format.ts        currency and date formatting
-  types.ts             City, Adventure, AdventureDetail, Reservation, Filters
-  styles/styles.css    design tokens and component styles
-backend/
-  server.js            Express app and routes
-  db.json              lowdb data store
+  styles/app.css       Tailwind theme: tokens, dark palette, utilities
 ```
 
-Filter state lives in `AdventuresPage` and is persisted to `localStorage` on
-every change, so it survives a reload. `useAsync` discards results from
-superseded requests, so a fast city change cannot leave stale data on screen.
+**Filter state lives in the URL, not localStorage.** A filtered view is a
+shareable link, back and forward step through filter changes, and a reload
+restores exactly what was on screen.
 
-## Pointing at a different backend
+**Filtering happens in the database.** The list endpoint returns a page of
+results plus facet counts, so the sidebar can show how many adventures each
+category would add. Those counts deliberately ignore the category filter — 
+otherwise ticking one box zeroes every other count.
 
-The client defaults to `http://localhost:8082`. Override it at build time:
+**The theme is a token swap.** Components reference semantic tokens
+(`--surface`, `--ink`, `--line`) rather than palette steps, so dark mode is one
+block of redefinitions instead of a `dark:` variant on every element.
 
-```bash
-VITE_BACKEND_ENDPOINT=https://api.example.com npm run build
-```
-
-## API
-
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | `/cities` | All cities |
-| GET | `/adventures?city=<id>` | Adventures in a city |
-| GET | `/adventures/detail?adventure=<id>` | One adventure |
-| POST | `/reservations/new` | Create a reservation |
-| GET | `/reservations` | All reservations |
-
-`POST /reservations/new` takes `{ name, date, person, adventure }` and responds
-with `{ success: true }`.
+**Auth is cookie-based.** Tokens live in httpOnly cookies, so no script on the
+page can read them. The client refreshes once on a 401 and replays the original
+request; concurrent 401s share a single refresh rather than racing.
 
 ## Testing
 
@@ -103,12 +99,13 @@ with `{ success: true }`.
 npm test
 ```
 
-70 tests across four layers:
+73 tests over four layers:
 
-- **Pure logic** (`lib/`) — filtering, localStorage persistence, date/currency formatting
-- **API client** — request shape, query params, POST body, error handling
-- **Components** — rendering, links, form submission, user interaction
-- **Pages** — loading, error and empty states against a mocked `fetch`
+- **API client** — URL building, error mapping, and the refresh-and-replay path
+- **URL filter state** — parsing, writing, defaults, and rejecting hand-edited values
+- **Components** — cards, filter panel, and the booking form against a mocked API
+- **Pages** — loading, empty and error states, and server-side sorting
 
-Tests run under `TZ=Asia/Kolkata`, since the booking timestamp format is
-timezone-sensitive.
+Two of these are regression tests for bugs found while building: a Radix
+checkbox nested in its own `<label>` cancelled its own click, and a slider whose
+controlled value was rebuilt each render put the page in a loop.
