@@ -4,7 +4,7 @@
 hand this file to a new session. It carries the goal, the decisions already
 made, what is built, what is blocked, and what comes next.
 
-**Last updated:** 2026-08-27 (end of Phase 3)
+**Last updated:** 2026-08-28 (end of Phase 5)
 
 ---
 
@@ -104,9 +104,31 @@ Three real bugs were found and fixed by driving the app rather than by tests:
    `noValidate`.
 
 ### Phase 4 — remaining: nothing required (admin panel and Cloudinary were declined)
-### Phase 5 — Ship — **NOT STARTED**
+### Phase 5 — Ship — **DONE, except the deploy itself**
 
-CI, Dockerfile, deploy, screenshots in the README.
+Built and committed:
+- GitHub Actions in both repos (typecheck, test, build). The backend adds a
+  job that runs the seed twice against a real MongoDB service container and
+  asserts it is idempotent. The frontend adds a bundle-size budget (700KB).
+- Two-stage Dockerfile + docker-compose (MongoDB + API, seeded on first run).
+-  blueprint for the API;  for the frontend, now
+  proxying  to the API so auth cookies stay first-party.
+- Route-level code splitting: shared chunk 704KB -> 545KB.
+- READMEs in both repos, with real screenshots in  and a
+  mermaid architecture diagram.
+
+**Not done, and needs Robin:** the actual deploy. Pushing to Render/Netlify
+needs his accounts, and it is his call when to publish. Before deploying:
+1. Set the Netlify  proxy target in  to the real API URL
+   (it currently points at ).
+2. Set  on the API to the deployed frontend origin exactly —
+   credentialed CORS cannot use a wildcard.
+3. Run  once against the Atlas database.
+
+**Docker was never built here** — Docker is not installed on this machine. The
+Dockerfile and compose file are unverified by execution, though the commands
+they run (npm ci, tsc, node dist/index.js, node dist/seed/seed.js) were each
+verified outside Docker.
 
 ---
 
