@@ -111,19 +111,19 @@ Built and committed:
   job that runs the seed twice against a real MongoDB service container and
   asserts it is idempotent. The frontend adds a bundle-size budget (700KB).
 - Two-stage Dockerfile + docker-compose (MongoDB + API, seeded on first run).
--  blueprint for the API;  for the frontend, now
-  proxying  to the API so auth cookies stay first-party.
+- `render.yaml` blueprint for the API; `netlify.toml` for the frontend, now
+  proxying `/api` to the API so auth cookies stay first-party.
 - Route-level code splitting: shared chunk 704KB -> 545KB.
-- READMEs in both repos, with real screenshots in  and a
+- READMEs in both repos, with real screenshots in `docs/screenshots/` and a
   mermaid architecture diagram.
 
 **Not done, and needs Robin:** the actual deploy. Pushing to Render/Netlify
 needs his accounts, and it is his call when to publish. Before deploying:
-1. Set the Netlify  proxy target in  to the real API URL
-   (it currently points at ).
-2. Set  on the API to the deployed frontend origin exactly —
+1. Set the Netlify `/api/*` proxy target in `netlify.toml` to the real API URL
+   (it currently points at `https://qtrip-api.onrender.com`, which is a guess).
+2. Set `CORS_ORIGINS` on the API to the deployed frontend origin exactly —
    credentialed CORS cannot use a wildcard.
-3. Run  once against the Atlas database.
+3. Run `npm run seed` once against the Atlas database.
 
 **Docker was never built here** — Docker is not installed on this machine. The
 Dockerfile and compose file are unverified by execution, though the commands
