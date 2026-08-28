@@ -16,14 +16,14 @@
 # because the first matching rule wins.
 [[redirects]]
   from = "/api/*"
-  to = "https://qtrip-api.onrender.com/api/:splat"
+  to = "https://nqtripbackend-1.onrender.com/api/:splat"
   status = 200
   force = true
 
 # The API also serves these at the root.
 [[redirects]]
   from = "/health"
-  to = "https://qtrip-api.onrender.com/health"
+  to = "https://nqtripbackend-1.onrender.com/health"
   status = 200
   force = true
 
