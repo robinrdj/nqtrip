@@ -5,8 +5,44 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# SPA fallback so react-router deep links (/adventures, /reservations) work
+# The API is proxied rather than called cross-origin.
+#
+# This is what keeps the auth cookies first-party: the browser sees one origin,
+# so the cookies are not third-party and survive the tracking protection that
+# would otherwise drop them. It also means the frontend needs no build-time
+# backend URL — `config.ts` defaults to same-origin.
+#
+# Update the target when the API moves. It must come before the SPA fallback,
+# because the first matching rule wins.
+[[redirects]]
+  from = "/api/*"
+  to = "https://qtrip-api.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# The API also serves these at the root.
+[[redirects]]
+  from = "/health"
+  to = "https://qtrip-api.onrender.com/health"
+  status = 200
+  force = true
+
+# SPA fallback, so react-router deep links (/trips, /adventures/:id) resolve.
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+# Vite fingerprints these filenames, so they can be cached indefinitely.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

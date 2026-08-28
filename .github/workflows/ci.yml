@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The suite is timezone-sensitive: booking dates are calendar days, and a
+      # UTC runner would not catch an offset bug that only appears east of
+      # Greenwich. The workspace script already pins TZ, this documents why.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Routes are code-split, so this measures the shared vendor chunk. It is
+      # currently ~545KB raw / ~170KB gzipped; the budget leaves headroom for a
+      # dependency or two without hiding a regression.
+      - name: Check bundle size
+        run: |
+          BYTES=$(find frontend/dist/assets -name '*.js' -printf '%s\n' | sort -nr | head -1)
+          echo "Largest JS chunk: $BYTES bytes"
+          if [ "$BYTES" -gt 700000 ]; then
+            echo "::error::Largest JS chunk is ${BYTES} bytes, over the 700KB budget."
+            exit 1
+          fi

@@ -1,25 +1,18 @@
 {
   "name": "qtrip",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "description": "QTrip - travel adventure booking app (React + TypeScript)",
   "license": "ISC",
   "workspaces": [
-    "backend",
     "frontend"
   ],
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c blue,green \"npm:dev:backend\" \"npm:dev:frontend\"",
-    "dev:backend": "npm run dev --workspace @qtrip/backend",
-    "dev:frontend": "npm run dev --workspace @qtrip/frontend",
-    "start": "npm run start --workspace @qtrip/backend",
+    "dev": "npm run dev --workspace @qtrip/frontend",
     "build": "npm run build --workspace @qtrip/frontend",
     "preview": "npm run preview --workspace @qtrip/frontend",
     "test": "npm run test --workspace @qtrip/frontend",
     "typecheck": "npm run typecheck --workspace @qtrip/frontend"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
   },
   "engines": {
     "node": ">=20"

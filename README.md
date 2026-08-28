@@ -3,7 +3,16 @@
 A travel adventure booking app: browse cities, filter adventures server-side,
 book seats against real capacity, save favourites and leave reviews.
 
-React 19-ready SPA in TypeScript (strict), backed by a TypeScript + MongoDB API.
+A React SPA in TypeScript, backed by a TypeScript + MongoDB API.
+
+![The landing page](docs/screenshots/01-landing-hero.jpg)
+
+| | |
+| --- | --- |
+| ![Destinations](docs/screenshots/02-destinations.jpg) | ![Adventures, dark theme](docs/screenshots/03-adventures-dark.jpg) |
+| Cities, with live adventure counts | Server-side filtering with facet counts |
+| ![Adventure detail](docs/screenshots/04-adventure-detail.jpg) | ![My trips](docs/screenshots/05-my-trips.jpg) |
+| Detail, carousel and booking | Your bookings, cancellable |
 
 ## Stack
 
@@ -17,7 +26,36 @@ React 19-ready SPA in TypeScript (strict), backed by a TypeScript + MongoDB API.
 | Routing | React Router 7 |
 | Build | Vite 6 |
 | Tests | Vitest + React Testing Library |
-| API | Express 5 + Mongoose 8 + MongoDB ([separate repo](../../qtripBackend/backend)) |
+| API | Express 5 + Mongoose 8 + MongoDB ([separate repo](https://github.com/robinrdj/nqtripbackend)) |
+
+## How it fits together
+
+```mermaid
+flowchart LR
+  subgraph Browser
+    UI["React SPA<br/>TanStack Query · Radix · Tailwind"]
+  end
+
+  subgraph Edge["Netlify"]
+    CDN["Static assets<br/>+ /api proxy"]
+  end
+
+  subgraph API["Express 5 · TypeScript"]
+    MW["helmet · CORS · rate limit<br/>Zod validation · JWT cookies"]
+    SVC["Services<br/>atomic seat claim · rating rollup"]
+  end
+
+  DB[("MongoDB Atlas")]
+
+  UI -->|"same-origin /api"| CDN
+  CDN -->|proxy| MW
+  MW --> SVC
+  SVC --> DB
+```
+
+The `/api` proxy is deliberate: it keeps the browser on a single origin, so the
+auth cookies stay first-party and survive the tracking protection that would
+otherwise drop them.
 
 ## Getting started
 
@@ -35,10 +73,8 @@ npm run dev:memory   # API + a disposable in-memory MongoDB, seeded
 ```
 
 That needs no connection string, so the whole app runs from a clean checkout.
-Use `npm run dev` there instead to run against a real `MONGODB_URI`.
-
-Vite proxies `/api` to `:8082`, so requests are same-origin in development and
-the auth cookies stay first-party.
+Use `npm run dev` there instead to run against a real `MONGODB_URI`, or
+`docker compose up` for MongoDB and the API in containers.
 
 Sign in with `demo@qtrip.dev` / `Demo1234`.
 
@@ -61,7 +97,7 @@ Sign in with `demo@qtrip.dev` / `Demo1234`.
 | `/saved` | Wishlist | auth |
 | `/account` | Profile and theme | auth |
 
-## How it fits together
+## Project layout
 
 ```
 frontend/src/
@@ -82,7 +118,7 @@ restores exactly what was on screen.
 
 **Filtering happens in the database.** The list endpoint returns a page of
 results plus facet counts, so the sidebar can show how many adventures each
-category would add. Those counts deliberately ignore the category filter — 
+category would add. Those counts deliberately ignore the category filter —
 otherwise ticking one box zeroes every other count.
 
 **The theme is a token swap.** Components reference semantic tokens
@@ -106,6 +142,30 @@ npm test
 - **Components** — cards, filter panel, and the booking form against a mocked API
 - **Pages** — loading, empty and error states, and server-side sorting
 
-Two of these are regression tests for bugs found while building: a Radix
-checkbox nested in its own `<label>` cancelled its own click, and a slider whose
-controlled value was rebuilt each render put the page in a loop.
+Three are regression tests for bugs found by driving the real app rather than
+by unit tests: a Radix checkbox nested in its own `<label>` cancelled its own
+click; a slider whose controlled value was rebuilt each render put the page in
+a loop that blocked all input; and native form validation pre-empted Zod, so no
+validation message could appear.
+
+## Deploying
+
+CI runs typecheck, tests and a build on every push (`.github/workflows/ci.yml`),
+and fails if the shared JS chunk crosses a size budget. Routes are code-split,
+so a first visit loads the landing page and the shell rather than the booking
+form, review editor and account screens as well.
+
+**Frontend — Netlify.** `netlify.toml` builds from the repo root, publishes
+`frontend/dist`, proxies `/api/*` to the API, and adds an SPA fallback plus
+security and cache headers. Point the proxy at your API URL before deploying.
+
+**Backend — Render.** `render.yaml` in the backend repo is a blueprint: it sets
+the build and start commands, points the health check at `/health`, generates
+the JWT secrets, and prompts for `MONGODB_URI` and `CORS_ORIGINS`.
+
+Two things must agree or auth will fail in production:
+
+1. `CORS_ORIGINS` on the API must list the frontend's exact origin. Credentialed
+   CORS cannot use a wildcard.
+2. The Netlify `/api/*` proxy target must be the deployed API. With the proxy in
+   place the frontend needs no build-time backend URL.
