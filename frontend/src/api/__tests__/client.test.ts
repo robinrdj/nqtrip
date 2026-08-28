@@ -149,13 +149,40 @@ describe("error handling", () => {
     });
   });
 
-  it("falls back to the status code when the body is not JSON", async () => {
+  it("names the backend when a 5xx has no readable body", async () => {
+    // The Vite proxy answers 500 when it cannot reach the API, so this is what
+    // a developer sees when they forget to start the backend.
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(new Response("<html>500</html>", { status: 500 }))
     );
 
-    await expect(api.fetchCities()).rejects.toThrowError("Request failed (500)");
+    await expect(api.fetchCities()).rejects.toThrowError(/API is not responding/i);
+  });
+
+  it("says so when a web page is served where the API should be", async () => {
+    // A second frontend squatting on the API port makes the proxy loop back
+    // and return index.html with a 200.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("<!doctype html><html></html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" },
+        })
+      )
+    );
+
+    await expect(api.fetchCities()).rejects.toThrowError(/web page where the API should be/i);
+  });
+
+  it("still reports a plain 4xx by status", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("nope", { status: 418 }))
+    );
+
+    await expect(api.fetchCities()).rejects.toThrowError("Request failed (418)");
   });
 
   it("explains a network failure rather than leaking the raw error", async () => {

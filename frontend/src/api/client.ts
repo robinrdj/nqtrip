@@ -64,10 +64,17 @@ async function readError(response: Response): Promise<ApiError> {
     // Not JSON, or empty — fall through to the status-based message.
   }
 
-  const message =
-    body?.error?.message ??
-    body?.message ??
-    `Request failed (${response.status})`;
+  /*
+    A 5xx with no readable body almost always means the API is not there: in
+    development the Vite proxy answers 500 when it cannot connect. Saying so
+    beats echoing a status code that tells the reader nothing about what to do.
+  */
+  const fallback =
+    response.status >= 500
+      ? "The QTrip API is not responding. If you are running it locally, check that the backend is started on port 8082."
+      : `Request failed (${response.status})`;
+
+  const message = body?.error?.message ?? body?.message ?? fallback;
 
   const fieldErrors: Record<string, string> = {};
   for (const detail of body?.error?.details ?? []) {
@@ -157,9 +164,19 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   try {
     return (await response.json()) as T;
   } catch (err) {
-    throw new ApiError("The server sent a response we could not read.", {
-      cause: err,
-    });
+    // Reaching here with an HTML body means something other than the API
+    // answered — typically a second frontend squatting on the API's port, so
+    // the proxy loops back and returns index.html.
+    const looksLikeHtml = (response.headers.get("content-type") ?? "").includes(
+      "text/html"
+    );
+
+    throw new ApiError(
+      looksLikeHtml
+        ? "Got a web page where the API should be. Check that the backend is running on port 8082 and that nothing else is using that port."
+        : "The server sent a response we could not read.",
+      { cause: err }
+    );
   }
 }
 
