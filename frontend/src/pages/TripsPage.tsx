@@ -1,17 +1,28 @@
 import { motion } from "framer-motion";
-import { CalendarDays, MapPin, Users } from "lucide-react";
+import { CalendarDays, Download, MapPin, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/Button";
 import { EmptyState, ErrorState, Skeleton } from "../components/ui/States";
-import { useCancelReservation, useReservations } from "../hooks/queries";
+import WeatherBadge from "../components/WeatherBadge";
+import {
+  useCancelReservation,
+  useDownloadTicket,
+  useReservations,
+} from "../hooks/queries";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { cn } from "../lib/cn";
-import { formatCurrency, formatDateLong, formatRelativeDay } from "../lib/format";
+import {
+  bookingReference,
+  formatCurrency,
+  formatDateLong,
+  formatRelativeDay,
+} from "../lib/format";
 import type { Reservation } from "../types";
 
 function TripCard({ reservation, index }: { reservation: Reservation; index: number }) {
   const cancelReservation = useCancelReservation();
+  const downloadTicket = useDownloadTicket();
 
   const cancelled = reservation.status === "cancelled";
   const past = new Date(reservation.date) < new Date() && !cancelled;
@@ -86,13 +97,40 @@ function TripCard({ reservation, index }: { reservation: Reservation; index: num
 
           <p className="mt-2 text-sm text-ink-muted">
             Booked for {reservation.name}
+            <span className="font-mono text-xs"> · {bookingReference(reservation.id)}</span>
           </p>
+
+          {/*
+            Only upcoming trips: the forecast covers the next 16 days, and a
+            past trip's weather is of no use to anyone.
+          */}
+          {!cancelled && !past && (
+            <WeatherBadge
+              city={reservation.city}
+              // Stored as UTC midnight of the booked day; the date part is the day.
+              date={reservation.date.slice(0, 10)}
+              className="mt-3"
+            />
+          )}
         </div>
 
         <div className="text-right">
           <p className="text-lg font-semibold tabular-nums text-ink">
             {formatCurrency(reservation.price)}
           </p>
+
+          {!cancelled && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              loading={downloadTicket.isPending}
+              onClick={() => downloadTicket.mutate(reservation.id)}
+            >
+              <Download className="size-4" aria-hidden="true" />
+              Ticket
+            </Button>
+          )}
 
           {/* Only a future, still-confirmed booking can be cancelled. */}
           {!cancelled && !past && (

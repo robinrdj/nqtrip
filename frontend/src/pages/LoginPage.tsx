@@ -3,6 +3,7 @@ import { MountainSnow } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
+import GoogleSignInButton from "../components/GoogleSignInButton";
 import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/Field";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -27,14 +28,20 @@ export default function LoginPage() {
     defaultValues: { email: "", password: "" },
   });
 
+  const goToNext = () => {
+    // `next` carries where the visitor was headed before being asked to sign
+    // in. Only relative paths are honoured — an absolute URL here would make
+    // this an open redirect. "//evil.com" is protocol-relative, so it is out too.
+    const next = searchParams.get("next");
+    navigate(next?.startsWith("/") && !next.startsWith("//") ? next : "/", {
+      replace: true,
+    });
+  };
+
   const onSubmit = handleSubmit(async (values) => {
     try {
       await login(values);
-      // `next` carries where the visitor was headed before being asked to sign
-      // in. Only relative paths are honoured — an absolute URL here would make
-      // this an open redirect.
-      const next = searchParams.get("next");
-      navigate(next?.startsWith("/") ? next : "/", { replace: true });
+      goToNext();
     } catch (err) {
       setError("root", {
         message:
@@ -61,6 +68,8 @@ export default function LoginPage() {
         </h1>
         <p className="mt-1.5 text-ink-soft">Sign in to book and save adventures.</p>
       </div>
+
+      <GoogleSignInButton onSignedIn={goToNext} />
 
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-1">
         <TextField

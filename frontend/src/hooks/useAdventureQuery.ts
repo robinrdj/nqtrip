@@ -44,6 +44,16 @@ function readSort(params: URLSearchParams): SortOption {
     : "recommended";
 }
 
+/**
+ * The grid/map toggle lives in the URL too, but it is presentation rather than
+ * filtering: it is not part of the API query (so switching views does not
+ * refetch), and it survives filter changes and "Clear all".
+ */
+function keepViewMode(from: URLSearchParams, to: URLSearchParams): void {
+  const view = from.get("view");
+  if (view) to.set("view", view);
+}
+
 export interface UseAdventureQueryResult {
   query: AdventureQuery;
   /** Merges a partial change, resetting to page 1 unless the page is what changed. */
@@ -90,19 +100,21 @@ export function useAdventureQuery(): UseAdventureQueryResult {
       if (next.priceMax !== undefined) params.set("priceMax", String(next.priceMax));
       if (next.sort !== "recommended") params.set("sort", next.sort);
       if (next.page > 1) params.set("page", String(next.page));
+      keepViewMode(searchParams, params);
 
       // `replace` so typing in the search box does not push a history entry per
       // keystroke; the back button should leave the page, not undo a letter.
       setSearchParams(params, { replace: true });
     },
-    [query, setSearchParams]
+    [query, searchParams, setSearchParams]
   );
 
   const clearFilters = useCallback(() => {
     const params = new URLSearchParams();
     if (query.city) params.set("city", query.city);
+    keepViewMode(searchParams, params);
     setSearchParams(params, { replace: true });
-  }, [query.city, setSearchParams]);
+  }, [query.city, searchParams, setSearchParams]);
 
   const activeFilterCount =
     (query.q ? 1 : 0) +

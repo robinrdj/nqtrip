@@ -1,17 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "framer-motion";
-import { CalendarDays, Check, Users } from "lucide-react";
+import { CalendarDays, Check, Download, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { ApiError } from "../api/client";
-import { useCreateReservation } from "../hooks/queries";
+import { useCreateReservation, useDownloadTicket } from "../hooks/queries";
 import { addDays, formatCurrency, toDateInputValue } from "../lib/format";
 import { bookingSchema, type BookingValues } from "../lib/schemas";
 import { useAuth } from "../providers/AuthProvider";
 import type { Adventure } from "../types";
 import { Button } from "./ui/Button";
 import { TextField } from "./ui/Field";
+import WeatherBadge from "./WeatherBadge";
 
 interface BookingFormProps {
   adventure: Adventure;
@@ -20,6 +21,7 @@ interface BookingFormProps {
 export default function BookingForm({ adventure }: BookingFormProps) {
   const { user, isAuthenticated } = useAuth();
   const createReservation = useCreateReservation();
+  const downloadTicket = useDownloadTicket();
   const [confirmed, setConfirmed] = useState<{ id: string; total: number } | null>(
     null
   );
@@ -55,6 +57,7 @@ export default function BookingForm({ adventure }: BookingFormProps) {
   }, [user?.name, isDirty, reset]);
 
   const persons = Number(watch("persons")) || 0;
+  const date = watch("date");
   const total = persons * adventure.costPerHead;
   const soldOut = adventure.seatsLeft <= 0;
 
@@ -100,7 +103,14 @@ export default function BookingForm({ adventure }: BookingFormProps) {
           {formatCurrency(confirmed.total)} for {adventure.name}.
         </p>
         <div className="mt-5 flex flex-col gap-2">
-          <Button asChild>
+          <Button
+            loading={downloadTicket.isPending}
+            onClick={() => downloadTicket.mutate(confirmed.id)}
+          >
+            <Download className="size-4" aria-hidden="true" />
+            Download ticket
+          </Button>
+          <Button variant="outline" asChild>
             <Link to="/trips">View my trips</Link>
           </Button>
           <Button variant="ghost" onClick={() => setConfirmed(null)}>
@@ -177,6 +187,8 @@ export default function BookingForm({ adventure }: BookingFormProps) {
           error={errors.date?.message}
           {...register("date")}
         />
+        {/* Reserves no space until a forecast exists, so the form never jumps for nothing. */}
+        <WeatherBadge city={adventure.city} date={date} className="-mt-1 mb-3" />
 
         <TextField
           label="How many people"

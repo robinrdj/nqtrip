@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import * as api from "../api/client";
 import { ApiError } from "../api/client";
+import { bookingReference } from "../lib/format";
 import type { AdventureListResponse, AdventureQuery } from "../types";
 
 /**
@@ -20,12 +21,16 @@ export const keys = {
   cities: ["cities"] as const,
   adventures: {
     all: ["adventures"] as const,
-    list: (query: Partial<AdventureQuery>) => ["adventures", "list", query] as const,
+    list: (query: Partial<AdventureQuery> & { limit?: number }) =>
+      ["adventures", "list", query] as const,
     detail: (id: string) => ["adventures", "detail", id] as const,
   },
   reviews: (adventureId: string) => ["reviews", adventureId] as const,
   reservations: ["reservations"] as const,
   wishlist: ["wishlist"] as const,
+  forecast: (city: string, date: string) => ["forecast", city, date] as const,
+  ticketCheck: (id: string, sig: string) => ["ticket-check", id, sig] as const,
+  authProviders: ["auth", "providers"] as const,
 };
 
 export function useCities() {
@@ -37,10 +42,14 @@ export function useCities() {
   });
 }
 
-export function useAdventures(query: Partial<AdventureQuery>) {
+export function useAdventures(
+  query: Partial<AdventureQuery> & { limit?: number },
+  { enabled = true }: { enabled?: boolean } = {}
+) {
   return useQuery({
     queryKey: keys.adventures.list(query),
     queryFn: ({ signal }) => api.fetchAdventures(query, signal),
+    enabled,
     // Keeps the previous page on screen while the next one loads, so changing a
     // filter dims the results rather than collapsing the layout to skeletons.
     placeholderData: keepPreviousData,
@@ -215,6 +224,62 @@ export function useDeleteReview(adventureId: string) {
         queryKey: keys.adventures.detail(adventureId),
       });
       toast.success("Review deleted.");
+    },
+  });
+}
+
+/**
+ * A day's forecast for a city. Off until both halves are known, and never
+ * retried: a missing forecast is shown as nothing, not as an error.
+ */
+export function useForecast(city: string | undefined, date: string | undefined) {
+  return useQuery({
+    queryKey: keys.forecast(city ?? "", date ?? ""),
+    queryFn: ({ signal }) => api.fetchForecast(city!, date!, signal),
+    enabled: Boolean(city && date),
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useAuthProviders() {
+  return useQuery({
+    queryKey: keys.authProviders,
+    queryFn: ({ signal }) => api.fetchAuthProviders(signal),
+    // Server configuration; it does not change while the page is open.
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+export function useTicketCheck(id: string | undefined, sig: string) {
+  return useQuery({
+    queryKey: keys.ticketCheck(id ?? "", sig),
+    queryFn: ({ signal }) => api.verifyTicket(id!, sig, signal),
+    enabled: Boolean(id),
+  });
+}
+
+/** Downloads a booking's ticket PDF and hands it to the browser to save. */
+export function useDownloadTicket() {
+  return useMutation({
+    mutationFn: async (reservationId: string) => {
+      const blob = await api.fetchTicket(reservationId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `qtrip-ticket-${bookingReference(reservationId)}.pdf`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      // Revoked on the next tick: some browsers start the download
+      // asynchronously and would find the URL already gone.
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof ApiError ? error.message : "We could not download that ticket."
+      );
     },
   });
 }

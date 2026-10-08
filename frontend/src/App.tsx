@@ -20,6 +20,7 @@ const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const TripsPage = lazy(() => import("./pages/TripsPage"));
 const SavedPage = lazy(() => import("./pages/SavedPage"));
 const AccountPage = lazy(() => import("./pages/AccountPage"));
+const TicketVerifyPage = lazy(() => import("./pages/TicketVerifyPage"));
 
 function NotFoundPage() {
   return (
@@ -71,6 +72,8 @@ export default function App() {
           <Route path="/adventures/:adventureId" element={<AdventureDetailPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          {/* Public: opened by whoever scans a ticket's QR code. */}
+          <Route path="/tickets/:reservationId" element={<TicketVerifyPage />} />
 
           {/* Everything below needs a session. */}
           <Route element={<RequireAuth />}>

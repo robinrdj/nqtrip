@@ -3,6 +3,7 @@ import { Check, MountainSnow, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
+import GoogleSignInButton from "../components/GoogleSignInButton";
 import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/Field";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -72,6 +73,8 @@ export default function RegisterPage() {
           Book adventures and keep track of your trips.
         </p>
       </div>
+
+      <GoogleSignInButton intent="signup" onSignedIn={() => navigate("/", { replace: true })} />
 
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-1">
         <TextField

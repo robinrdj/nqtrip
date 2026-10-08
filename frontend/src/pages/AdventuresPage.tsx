@@ -1,9 +1,10 @@
-import { Search, X } from "lucide-react";
+import { LayoutGrid, Map as MapIcon, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import AdventureCard from "../components/AdventureCard";
 import FilterPanel from "../components/FilterPanel";
+import LazyAdventureMap from "../components/map/LazyAdventureMap";
 import { Button } from "../components/ui/Button";
 import { CardGridSkeleton, EmptyState, ErrorState } from "../components/ui/States";
 import { useAdventures, useCities, useToggleWishlist } from "../hooks/queries";
@@ -70,13 +71,68 @@ function SearchBox({
   );
 }
 
+/** The API's page-size ceiling; the map asks for as many pins as it may. */
+const MAP_LIMIT = 60;
+
+type ViewMode = "grid" | "map";
+
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: ViewMode;
+  onChange: (view: ViewMode) => void;
+}) {
+  const options = [
+    { value: "grid" as const, label: "Grid", icon: LayoutGrid },
+    { value: "map" as const, label: "Map", icon: MapIcon },
+  ];
+
+  return (
+    <div role="group" aria-label="View" className="flex h-11 rounded-xl border border-line bg-surface p-1">
+      {options.map(({ value, label, icon: Icon }) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={view === value}
+          onClick={() => onChange(value)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition",
+            view === value
+              ? "bg-surface-inset text-ink shadow-sm"
+              : "text-ink-muted hover:text-ink"
+          )}
+        >
+          <Icon className="size-4" aria-hidden="true" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function AdventuresPage() {
   const { query, update, clearFilters, activeFilterCount } = useAdventureQuery();
   const { data: cities } = useCities();
   const { isAuthenticated } = useAuth();
   const toggleWishlist = useToggleWishlist();
 
-  const { data, isPending, isFetching, error, refetch } = useAdventures(query);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view: ViewMode = searchParams.get("view") === "map" ? "map" : "grid";
+
+  const setView = (next: ViewMode) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === "map") params.set("view", "map");
+    else params.delete("view");
+    // The map shows every match at once, so a page number means nothing there.
+    params.delete("page");
+    setSearchParams(params, { replace: true });
+  };
+
+  // The map wants every match as a pin, not one page of them.
+  const { data, isPending, isFetching, error, refetch } = useAdventures(
+    view === "map" ? { ...query, page: 1, limit: MAP_LIMIT } : query
+  );
 
   const city = cities?.find((c) => c.id === query.city);
   useDocumentTitle(city ? `Adventures in ${city.city}` : "All adventures");
@@ -117,6 +173,7 @@ export default function AdventuresPage() {
             ))}
           </select>
 
+          <ViewToggle view={view} onChange={setView} />
         </div>
       </div>
 
@@ -144,7 +201,23 @@ export default function AdventuresPage() {
             />
           )}
 
-          {data && items.length > 0 && (
+          {data && items.length > 0 && view === "map" && (
+            <div className={cn("transition-opacity duration-200", isFetching && "opacity-60")}>
+              <LazyAdventureMap
+                adventures={items}
+                fallbackCenter={city?.location}
+                className="h-[65vh] min-h-96 w-full"
+              />
+              <p className="mt-3 text-sm text-ink-muted">
+                {data.total > items.length
+                  ? `Showing ${items.length} of ${data.total} on the map. Pick a city or narrow the filters to see the rest. `
+                  : `${items.length} ${items.length === 1 ? "adventure" : "adventures"} on the map. `}
+                Pins show the area, not the exact meeting point.
+              </p>
+            </div>
+          )}
+
+          {data && items.length > 0 && view === "grid" && (
             <>
               {/*
                 While a new page or filter is loading, the previous results stay

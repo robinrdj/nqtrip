@@ -1,7 +1,10 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { Clock, Heart, MapPin, Users } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import BookingForm from "../components/BookingForm";
+import LiveIndicator from "../components/LiveIndicator";
+import LazyAdventureMap from "../components/map/LazyAdventureMap";
 import PhotoCarousel from "../components/PhotoCarousel";
 import ReviewSection from "../components/ReviewSection";
 import { Button } from "../components/ui/Button";
@@ -9,6 +12,7 @@ import { Rating } from "../components/ui/Rating";
 import { EmptyState, ErrorState, Skeleton } from "../components/ui/States";
 import { useAdventure, useCities, useToggleWishlist } from "../hooks/queries";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { useLiveAdventure } from "../hooks/useLiveAdventure";
 import { cn } from "../lib/cn";
 
 function DetailSkeleton() {
@@ -29,6 +33,9 @@ export default function AdventureDetailPage() {
   const { data, isPending, error, refetch } = useAdventure(adventureId);
   const { data: cities } = useCities();
   const toggleWishlist = useToggleWishlist();
+  // Opened from the route param, not the loaded adventure, so the stream
+  // connects in parallel with the first fetch instead of after it.
+  const live = useLiveAdventure(adventureId);
 
   const adventure = data?.adventure;
   useDocumentTitle(adventure?.name ?? "Adventure");
@@ -102,16 +109,37 @@ export default function AdventureDetailPage() {
               {adventure.duration} hours
             </span>
 
-            <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-flex items-center gap-1.5"
+              // On the stable wrapper: mid-animation there are briefly two
+              // counts inside it, the outgoing and the incoming.
+              data-testid="seats"
+              data-seats-left={adventure.seatsLeft}
+            >
               <Users className="size-4" aria-hidden="true" />
-              {adventure.seatsLeft > 0
-                ? `${adventure.seatsLeft} of ${adventure.capacity} seats left`
-                : "Fully booked"}
+              {/*
+                Keyed on the count, so a live update visibly ticks over rather
+                than silently changing a number nobody was looking at.
+              */}
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={adventure.seatsLeft}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                >
+                  {adventure.seatsLeft > 0
+                    ? `${adventure.seatsLeft} of ${adventure.capacity} seats left`
+                    : "Fully booked"}
+                </motion.span>
+              </AnimatePresence>
             </span>
 
             <span className="rounded-full bg-surface-inset px-2.5 py-1 text-xs font-medium">
               {adventure.category}
             </span>
+
+            <LiveIndicator {...live} />
           </div>
         </div>
 
@@ -135,6 +163,21 @@ export default function AdventureDetailPage() {
               {adventure.content}
             </p>
           </div>
+
+          {adventure.location && (
+            <div className="mt-10">
+              <h2 className="text-xl font-semibold text-ink">Where you will be</h2>
+              <p className="mt-1 text-sm text-ink-muted">
+                The pin marks the area. The exact meeting point is on your ticket.
+              </p>
+              <LazyAdventureMap
+                adventures={[adventure]}
+                activeId={adventure.id}
+                popups={false}
+                className="mt-4 h-72 w-full"
+              />
+            </div>
+          )}
         </div>
 
         {/*

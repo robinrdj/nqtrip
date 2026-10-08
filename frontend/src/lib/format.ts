@@ -84,3 +84,11 @@ export function toDateInputValue(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * The short reference printed on tickets and quoted in emails. Derived the
+ * same way as on the server, so the three always agree.
+ */
+export function bookingReference(reservationId: string): string {
+  return `QT-${reservationId.slice(-8).toUpperCase()}`;
+}

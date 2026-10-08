@@ -15,6 +15,8 @@ interface AuthContextValue {
     email: string;
     password: string;
   }) => Promise<User>;
+  /** Exchanges a Google Identity Services credential for a session. */
+  loginWithGoogle: (credential: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -75,6 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const googleMutation = useMutation({
+    mutationFn: api.loginWithGoogle,
+    onSuccess: ({ user: next }) => {
+      queryClient.setQueryData(currentUserKey, next);
+      resetIdentityScopedCache();
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: api.logout,
     onSettled: () => {
@@ -92,11 +102,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: user !== null,
       login: async (input) => (await loginMutation.mutateAsync(input)).user,
       register: async (input) => (await registerMutation.mutateAsync(input)).user,
+      loginWithGoogle: async (credential) =>
+        (await googleMutation.mutateAsync(credential)).user,
       logout: async () => {
         await logoutMutation.mutateAsync();
       },
     }),
-    [user, isPending, loginMutation, registerMutation, logoutMutation]
+    [user, isPending, loginMutation, registerMutation, googleMutation, logoutMutation]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

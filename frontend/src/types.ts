@@ -36,6 +36,11 @@ export const SORT_LABELS: Record<SortOption, string> = {
   rating: "Highest rated",
 };
 
+export interface GeoPoint {
+  lat: number;
+  lng: number;
+}
+
 export interface City {
   id: string;
   city: string;
@@ -43,6 +48,7 @@ export interface City {
   image: string;
   country?: string;
   adventureCount: number;
+  location?: GeoPoint;
 }
 
 export interface Adventure {
@@ -65,6 +71,8 @@ export interface Adventure {
   available: boolean;
   ratingAverage: number;
   ratingCount: number;
+  /** Illustrative pin near the city centre; absent on un-reseeded data. */
+  location?: GeoPoint;
 }
 
 export interface User {
@@ -141,4 +149,63 @@ export interface AdventureQuery {
   priceMax?: number;
   sort: SortOption;
   page: number;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Weather, tickets and sign-in providers                                      */
+/* -------------------------------------------------------------------------- */
+
+export type WeatherCondition =
+  | "clear"
+  | "partly-cloudy"
+  | "cloudy"
+  | "fog"
+  | "drizzle"
+  | "rain"
+  | "snow"
+  | "thunderstorm";
+
+/** A day's forecast, or why there is none. Never an error: weather is optional. */
+export type Forecast =
+  | {
+      available: true;
+      date: string;
+      condition: WeatherCondition;
+      summary: string;
+      tempMax: number;
+      tempMin: number;
+      precipitationChance: number | null;
+    }
+  | {
+      available: false;
+      date: string;
+      reason: "out-of-range" | "no-location" | "unavailable";
+    };
+
+/** What the public verify page learns from a scanned QR code. */
+export type TicketCheck =
+  | {
+      valid: true;
+      reference: string;
+      status: "confirmed" | "cancelled";
+      adventureName: string;
+      city?: string;
+      date: string;
+      persons: number;
+      /** First name and initial only. */
+      guest: string;
+    }
+  | { valid: false };
+
+export interface AuthProviders {
+  password: boolean;
+  google: { enabled: true; clientId: string } | { enabled: false };
+}
+
+/** Pushed over the live stream for an adventure. */
+export interface SeatUpdate {
+  adventureId: string;
+  capacity: number;
+  booked: number;
+  seatsLeft: number;
 }

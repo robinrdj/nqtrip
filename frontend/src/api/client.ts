@@ -3,11 +3,14 @@ import type {
   Adventure,
   AdventureListResponse,
   AdventureQuery,
+  AuthProviders,
   City,
+  Forecast,
   Paged,
   Reservation,
   Review,
   ReviewListResponse,
+  TicketCheck,
   User,
 } from "../types";
 
@@ -126,10 +129,12 @@ interface RequestOptions {
   signal?: AbortSignal;
   /** Internal: prevents a refreshed request from retrying forever. */
   retry?: boolean;
+  /** Read the body as a Blob (a PDF download) rather than JSON. */
+  as?: "json" | "blob";
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, signal, retry = true } = options;
+  const { method = "GET", body, signal, retry = true, as = "json" } = options;
 
   let response: Response;
 
@@ -161,6 +166,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (response.status === 204) return undefined as T;
 
+  if (as === "blob") return (await response.blob()) as T;
+
   try {
     return (await response.json()) as T;
   } catch (err) {
@@ -181,7 +188,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 /** Drops empty values so they never reach the URL as `&q=&priceMin=`. */
-function toSearchParams(query: Partial<AdventureQuery>): string {
+function toSearchParams(query: Partial<AdventureQuery> & { limit?: number }): string {
   const params = new URLSearchParams();
 
   if (query.city) params.set("city", query.city);
@@ -193,6 +200,7 @@ function toSearchParams(query: Partial<AdventureQuery>): string {
   if (query.priceMax !== undefined) params.set("priceMax", String(query.priceMax));
   if (query.sort && query.sort !== "recommended") params.set("sort", query.sort);
   if (query.page && query.page > 1) params.set("page", String(query.page));
+  if (query.limit) params.set("limit", String(query.limit));
 
   const serialised = params.toString();
   return serialised ? `?${serialised}` : "";
@@ -208,7 +216,7 @@ export async function fetchCities(signal?: AbortSignal): Promise<City[]> {
 }
 
 export function fetchAdventures(
-  query: Partial<AdventureQuery>,
+  query: Partial<AdventureQuery> & { limit?: number },
   signal?: AbortSignal
 ): Promise<AdventureListResponse> {
   return request<AdventureListResponse>(`/adventures${toSearchParams(query)}`, {
@@ -334,4 +342,60 @@ export function toggleWishlist(
     `/wishlist/${encodeURIComponent(adventureId)}`,
     { method: "POST" }
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tickets, weather and sign-in providers                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The ticket PDF for one of the visitor's bookings.
+ *
+ * Fetched rather than linked to directly: a plain <a href> would skip the
+ * refresh-on-401 above, so a ticket downloaded more than fifteen minutes after
+ * the last request would fail with an expired access token.
+ */
+export function fetchTicket(reservationId: string): Promise<Blob> {
+  return request<Blob>(`/reservations/${encodeURIComponent(reservationId)}/ticket`, {
+    as: "blob",
+  });
+}
+
+export function verifyTicket(
+  reservationId: string,
+  sig: string,
+  signal?: AbortSignal
+): Promise<TicketCheck> {
+  return request<TicketCheck>(
+    `/tickets/${encodeURIComponent(reservationId)}/verify?sig=${encodeURIComponent(sig)}`,
+    { signal }
+  );
+}
+
+export async function fetchForecast(
+  city: string,
+  date: string,
+  signal?: AbortSignal
+): Promise<Forecast> {
+  const params = new URLSearchParams({ city, date });
+  const body = await request<{ forecast?: Forecast }>(`/weather?${params}`, { signal });
+  // A body without a forecast is treated like any other missing forecast:
+  // weather is decoration, and must not surface as an error.
+  return body?.forecast ?? { available: false, date, reason: "unavailable" };
+}
+
+export function fetchAuthProviders(signal?: AbortSignal): Promise<AuthProviders> {
+  return request<AuthProviders>("/auth/providers", { signal });
+}
+
+export function loginWithGoogle(credential: string): Promise<{ user: User }> {
+  return request<{ user: User }>("/auth/google", {
+    method: "POST",
+    body: { credential },
+  });
+}
+
+/** Where the live seat stream for an adventure is served. */
+export function liveAdventureUrl(adventureId: string): string {
+  return `${backendEndpoint}/api/v1/adventures/${encodeURIComponent(adventureId)}/live`;
 }

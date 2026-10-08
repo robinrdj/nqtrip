@@ -12,7 +12,9 @@ export default defineConfig({
     // 8082 — the API's port — and every /api call then loops back into the
     // frontend and returns HTML instead of data.
     strictPort: true,
-    open: true,
+    // Not when a machine is driving: CI and the Playwright suite start this
+    // server themselves and have no use for a stray browser window.
+    open: !process.env.CI && !process.env.PLAYWRIGHT,
     // Lets the browser talk to the API on the same origin in development, so
     // the auth cookies are first-party and no CORS preflight is involved.
     proxy: {
@@ -25,6 +27,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
+    // e2e/ holds Playwright specs, which run in a real browser, not jsdom.
+    include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["./src/test/setup.ts"],
     css: false,
   },

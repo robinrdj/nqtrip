@@ -12,7 +12,8 @@
     "build": "npm run build --workspace @qtrip/frontend",
     "preview": "npm run preview --workspace @qtrip/frontend",
     "test": "npm run test --workspace @qtrip/frontend",
-    "typecheck": "npm run typecheck --workspace @qtrip/frontend"
+    "typecheck": "npm run typecheck --workspace @qtrip/frontend",
+    "e2e": "npm run e2e --workspace @qtrip/frontend"
   },
   "engines": {
     "node": ">=20"
